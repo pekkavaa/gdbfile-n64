@@ -31,9 +31,9 @@ def check_if_symbol_has_address(name: str) -> bool:
   except gdb.error:
     return False
 
-fileLastModifiedSymbol = 'GDB::fileLastModified'
-writeFileSymbol = 'GDB::writeFile'
-readFileSymbol = 'GDB::readFile'
+fileLastModifiedSymbol = 'gdbfile_last_modified'
+writeFileSymbol = 'gdbfile_write'
+readFileSymbol = 'gdbfile_read'
 
 any_function_found = False
 any_function_found |= check_if_symbol_has_address(fileLastModifiedSymbol)
@@ -70,8 +70,8 @@ def map_path(path: str):
 
 def getReturnValues():
   frame = gdb.selected_frame()
-  returnValues, _ =  gdb.lookup_symbol("returnValues", frame.block().static_block)
-  return returnValues.value()
+  responses, _ =  gdb.lookup_symbol("responses", frame.block().static_block)
+  return responses.value()
 
 def assign(var, value):
   return gdb.execute(f"set {var}={value}", to_string=True)
@@ -87,11 +87,11 @@ class BPFileLastModified(gdb.Breakpoint):
     path = frame.read_var("path").string()
     real_path = map_path(path)
 
-    returnValues, _ =  gdb.lookup_symbol("returnValues", frame.block().static_block)
+    responses, _ =  gdb.lookup_symbol("responses", frame.block().static_block)
 
-    last_modified = returnValues.value()["gdbLastModified"]
-    # gdb.execute(f"set returnValues.gdbLastModified=0", to_string=True)
-    assign("returnValues.gdbLastModified", "0")
+    last_modified = responses.value()["last_modified"]
+    # gdb.execute(f"set responses.gdbLastModified=0", to_string=True)
+    assign("responses.last_modified", "0")
 
     try:
       last_modified_ms = int(pathlib.Path(real_path).stat().st_mtime_ns / 1e6)
@@ -108,8 +108,8 @@ class BPFileLastModified(gdb.Breakpoint):
     # print(f"{last_modified=}")
     # last_modified.assign(last_modified_ms)
 
-    assign("returnValues.gdbLastModified", last_modified_ms)
-    # gdb.execute(f"set returnValues.gdbLastModified={last_modified_ms}", to_string=True)
+    assign("responses.last_modified", last_modified_ms)
+    # gdb.execute(f"set responses.gdbLastModified={last_modified_ms}", to_string=True)
     # print(f"assigned {last_modified_ms} to {time}")
     # print("time value now:\n", time_value);
 
@@ -124,12 +124,12 @@ class BPWriteFile(gdb.Breakpoint):
 
     # data_addr = str(ctypes.c_uint32(frame.read_var("data")).value)
     data_addr = frame.read_var("data")
-    size = int(frame.read_var("dataSizeBytes"))
+    size = int(frame.read_var("data_size_bytes"))
 
     # wrote_bytes = getReturnValues()["gdbWroteBytes"]
     # wrote_bytes.assign(-1) # Set a return value of -1 in case open() throws
 
-    assign("returnValues.gdbWroteBytes", -1)
+    assign("responses.wrote_bytes", -1)
 
     data = gdb.selected_inferior().read_memory(data_addr, size)
 
@@ -144,7 +144,7 @@ class BPWriteFile(gdb.Breakpoint):
       print(e)
       return False
 
-    assign("returnValues.gdbWroteBytes", wrote)
+    assign("responses.wrote_bytes", wrote)
     # wrote_bytes.assign(wrote)
     print(f"Wrote {len(data)} bytes to {real_path}")
     return False
@@ -158,14 +158,14 @@ class BPReadFile(gdb.Breakpoint):
 
     # print(f"read {path=}")
 
-    max_size = int(frame.read_var("maxSize"))
+    max_size = int(frame.read_var("max_size"))
     dest = frame.read_var("dest")
     # dest_addr: str = str(ctypes.c_uint32(dest).value)
     dest_addr = dest
 
-    read_bytes = getReturnValues()["gdbReadBytes"]
+    read_bytes = getReturnValues()["read_bytes"]
     # read_bytes.assign(-1) # Set a return value of -1 in case open() throws
-    assign("returnValues.gdbReadBytes", -1)
+    assign("responses.read_bytes", -1)
 
     real_path = map_path(path)
 
@@ -180,7 +180,7 @@ class BPReadFile(gdb.Breakpoint):
     remote.write_memory(dest_addr, data)
 
     # read_bytes.assign(len(data))
-    assign("returnValues.gdbReadBytes", len(data))
+    assign("responses.read_bytes", len(data))
 
     # print(f"Read {len(data)} bytes from '{path}' to {hex(ctypes.c_uint32(dest).value)}")
     print(f"Read {len(data)} bytes from '{path}' to {hex(int(dest))}")

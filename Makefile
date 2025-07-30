@@ -1,10 +1,8 @@
 BUILD_DIR=build
 include $(N64_INST)/include/n64.mk
 
-N64_CXXFLAGS += -std=gnu++11
-
-src = example.cpp gdb.cpp
-obj = $(src:%.cpp=$(BUILD_DIR)/%.o)
+src = example.c gdbfile.c
+obj = $(src:%.c=$(BUILD_DIR)/%.o)
 
 $(info src: $(src))
 $(info object files: $(obj))

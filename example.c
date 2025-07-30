@@ -1,5 +1,5 @@
 #include <libdragon.h>
-#include "gdb.hpp"
+#include "gdbfile.h"
 
 int main()
 {
@@ -18,18 +18,22 @@ int main()
         rdpq_attach_clear(disp, NULL);
         rdpq_detach();
 
-        uint64_t modified = GDB::fileLastModified("hello.txt");
+        uint64_t modified = gdbfile_last_modified("hello.txt");
         char msg[100];
         snprintf(msg, sizeof(msg), "Last modified: %llu", modified);
         graphics_draw_text(disp, 16, 16, msg);
 
         uint8_t contents[100];
-        int size = GDB::readFile("hello.txt", sizeof(contents)-1, contents);
+        int size = gdbfile_read("hello.txt", sizeof(contents)-1, contents);
 
         if (size > -1) {
             contents[size] = '\0'; // Terminate the string because GDB just copies bytes 
             graphics_draw_text(disp, 16, 32, (const char*)contents);
+
+            // Write back an answer
+            gdbfile_write_string("output.txt", "It works!");
         }
+
 
         display_show(disp);
 

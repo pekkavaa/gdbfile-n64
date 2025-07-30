@@ -1,6 +1,6 @@
-# GDB file watcher script & N64 runtime for it
+# Emulated N64 file system access via GDB
 
-*Allows the GDB debugger's guest to pull updated files from the host. Useful for emulated systems without native filesystem access.**
+*Allows an N64 ROM running in the **ares** emulator to detect changes and pull updated files from the host.**
 
 This example is for the [homebrew **libdragon** SDK](https://libdragon.dev/) for the Nintendo 64.
 You need to set the `N64_INST` environment variable before building.
