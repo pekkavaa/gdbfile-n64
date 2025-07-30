@@ -4,29 +4,33 @@ Reads and writes files in the given GDB_FILE_HOOK_DIR env var.
 The paths are sanitized against parent traversal to prevent accidents,
 but shouldn't be considered secure.
 
-This requres support on the guest side, see gdb.cpp.
+This requres support on the guest side, see gdbfile.c.
 
 This script is meant to be executed right after connecting to a remote.
 In case the script is started with old symbols and the hook functions aren't
 found the, the script terminates GDB and lets run_file_hook.py restart itself.
+
+Here only the bare minimum of GDB's Python API is used, so this script can be
+run both on old versions of GDB and also on an install without the supporting
+Python helper libraries, such as in the one of libdragon.
 """
 
-import sys
 import os
 import traceback
-# import ctypes
 import pathlib
 from datetime import datetime
 
-# The gdb module is automatically imported but it's nice to have here for IDE autocompletion.
+# The gdb module gets automatically imported but it's nice to have here for IDE autocompletion.
 import gdb
+
+# Log file access by default
+verbose = True
 
 # A symbol has an address if its 'address' query doesn't throw.
 # This is the only robust way I found to check for the existence of a symbol.
 def check_if_symbol_has_address(name: str) -> bool:
   try:
-    result = gdb.execute(f"info address {name}", to_string=True)
-    # print("result", result)
+    gdb.execute(f"info address {name}", to_string=True)
     return True
   except gdb.error:
     return False
@@ -87,10 +91,6 @@ class BPFileLastModified(gdb.Breakpoint):
     path = frame.read_var("path").string()
     real_path = map_path(path)
 
-    responses, _ =  gdb.lookup_symbol("responses", frame.block().static_block)
-
-    last_modified = responses.value()["last_modified"]
-    # gdb.execute(f"set responses.gdbLastModified=0", to_string=True)
     assign("responses.last_modified", "0")
 
     try:
@@ -99,43 +99,31 @@ class BPFileLastModified(gdb.Breakpoint):
       print(e)
       return False
 
-
-    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     if last_modified_ms != earlier_modified_ms:
-      print(f"[{timestamp_str}] {path} {last_modified_ms=}")
+      if verbose:
+        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp_str}] {path} {last_modified_ms=}")
       earlier_modified_ms = last_modified_ms
-    # print(f"{last_modified=}")
-    # last_modified.assign(last_modified_ms)
 
     assign("responses.last_modified", last_modified_ms)
-    # gdb.execute(f"set responses.gdbLastModified={last_modified_ms}", to_string=True)
-    # print(f"assigned {last_modified_ms} to {time}")
-    # print("time value now:\n", time_value);
-
 
 class BPWriteFile(gdb.Breakpoint):
   def stop (self):
-    # assert ValueError("WriteFile not implemented (ctypes dep not working)")
     frame = gdb.selected_frame()
     path = frame.read_var("path").string()
 
-    # print(f"save {path=}")
-
-    # data_addr = str(ctypes.c_uint32(frame.read_var("data")).value)
     data_addr = frame.read_var("data")
     size = int(frame.read_var("data_size_bytes"))
-
-    # wrote_bytes = getReturnValues()["gdbWroteBytes"]
-    # wrote_bytes.assign(-1) # Set a return value of -1 in case open() throws
 
     assign("responses.wrote_bytes", -1)
 
     data = gdb.selected_inferior().read_memory(data_addr, size)
 
     real_path = map_path(path)
-    print(f"{path=} {data=}")
-    print(f"{real_path=}")
+
+    if verbose:
+      print(f"{path=} {data=}")
+      print(f"{real_path=}")
 
     try:
       with open(real_path, "wb") as f:
@@ -145,8 +133,8 @@ class BPWriteFile(gdb.Breakpoint):
       return False
 
     assign("responses.wrote_bytes", wrote)
-    # wrote_bytes.assign(wrote)
-    print(f"Wrote {len(data)} bytes to {real_path}")
+    if verbose:
+      print(f"Wrote {len(data)} bytes to {real_path}")
     return False
 
 
@@ -156,15 +144,9 @@ class BPReadFile(gdb.Breakpoint):
     frame = gdb.selected_frame()
     path = frame.read_var("path").string()
 
-    # print(f"read {path=}")
-
     max_size = int(frame.read_var("max_size"))
-    dest = frame.read_var("dest")
-    # dest_addr: str = str(ctypes.c_uint32(dest).value)
-    dest_addr = dest
+    dest_addr = frame.read_var("dest")
 
-    read_bytes = getReturnValues()["read_bytes"]
-    # read_bytes.assign(-1) # Set a return value of -1 in case open() throws
     assign("responses.read_bytes", -1)
 
     real_path = map_path(path)
@@ -179,11 +161,10 @@ class BPReadFile(gdb.Breakpoint):
     data = raw_data[:max_size]
     remote.write_memory(dest_addr, data)
 
-    # read_bytes.assign(len(data))
     assign("responses.read_bytes", len(data))
 
-    # print(f"Read {len(data)} bytes from '{path}' to {hex(ctypes.c_uint32(dest).value)}")
-    print(f"Read {len(data)} bytes from '{path}' to {hex(int(dest))}")
+    if verbose:
+      print(f"Read {len(data)} bytes from '{path}' to {hex(int(dest_addr))}")
 
     return False
 
@@ -195,7 +176,7 @@ class BPReadFile(gdb.Breakpoint):
         print(traceback.print_exc())
 
       
-# Finally register the actual hooks
+# Finally register the hooks
 
 bp_lm = BPFileLastModified(fileLastModifiedSymbol)
 bp_lm.silent = True
@@ -214,6 +195,9 @@ bp_read.silent = True
 #
 # The libdragon toolchain's GDB installation doesn't ship with the Python libraries.
 # That's why we need to import the events module directly (done normally in `python/lib/gdb/__init__.py`)
+#
+# NOTE: I couldn't get this to work. As a workaround, the run_file_hook.sh driver script
+#       let's this Python script crash and restarts gdb. This also forces a symbol reload :-)
 
 # import _gdbevents as events
 
