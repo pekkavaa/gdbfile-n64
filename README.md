@@ -37,7 +37,14 @@ Then launch **ares** with [the GDB support and homebrew mode turned on](https://
 ares example.n64
 ```
 
-Now when you edit `testfiles/hello.txt` you should see the drawn text update.
+You should see the contents of `testfiles/hello.txt` appear on screen:
+
+<img width="646" height="561" alt="image" src="https://github.com/user-attachments/assets/6cdd2790-99f4-4bfa-8a5a-8859755e4111" />
+
+Now when you edit the file, you should see the drawn text update:
+
+<img width="644" height="561" alt="image" src="https://github.com/user-attachments/assets/48ed7429-782a-4d61-8452-83eed70051ce" />
+
 Also a `testfiles/output.txt` file should've appeared. To verify this, run:
 
 ```
